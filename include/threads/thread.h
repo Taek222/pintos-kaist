@@ -95,6 +95,9 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	// 각 스레드 당 깨어나야 Wake Time을 가짐
+	int64_t wake_time;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -142,5 +145,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+int thread_sleep(int64_t ticks);
+int thread_awake(int64_t ticks);
+int64_t get_min_time();
 
 #endif /* threads/thread.h */

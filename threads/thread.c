@@ -28,6 +28,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct list sleep_list;
+int64_t min_time_in_sleep;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -79,6 +82,8 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
+#define MIN(a, b) ((a) > (b) ? (b) : (a))
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -109,6 +114,9 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+
+	list_init(&sleep_list);
+	min_time_in_sleep = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -587,4 +595,58 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+// thread_sleep: 실행중인 스레드를 Sleep 리스트에 넣음
+int thread_sleep(int64_t ticks) {
+	struct thread *curr = thread_current();
+
+	// 인터럽트 끄기
+	enum intr_level old_level = intr_disable ();
+
+	// 스레드 Wake Time 기록
+	curr->wake_time = ticks;
+
+	// 현재 스레드가 idle이 아니면 sleep 리스트에 넣음
+	if (curr != idle_thread) {
+		list_push_back(&sleep_list, &(curr->elem));
+	}
+
+	// min_time_in_sleep 업데이트
+	min_time_in_sleep = MIN(min_time_in_sleep, ticks);
+
+	do_schedule(THREAD_BLOCKED);
+
+	intr_set_level(old_level);
+
+	return 0;
+}
+
+// thread_awake: Sleep 리스트에서 깨워야 할 스레드 하나를 찾아 깨움
+int thread_awake(int64_t ticks) {
+	struct list_elem *e = list_begin(&sleep_list);
+	struct thread *curr;
+
+	int64_t new_min = INT64_MAX;
+
+	while (e != list_tail(&sleep_list)) {
+		// list_entry에서 세번째 파라미터는 thread 구조체의 멤버명 'elem'을 뜻함
+		curr = list_entry(e, struct thread, elem);
+		if (curr->wake_time <= ticks) {
+			// Sleep 리스트에서 삭제 후 Ready 리스트에 넣음
+			e = list_remove(&curr->elem);
+			thread_unblock(curr);
+		} else {
+			// 하나를 내보냈으니, 새로운 리스트의 최소 Wake Time 업데이트
+			new_min = MIN(new_min, curr->wake_time);
+			min_time_in_sleep = new_min;
+
+			e = list_next(e);
+		}
+	} 
+}
+
+// get_min_time: Sleep 리스트에 있는 최소 Wake Time 리턴
+int64_t get_min_time() {
+	return min_time_in_sleep;
 }
