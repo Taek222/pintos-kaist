@@ -98,6 +98,12 @@ struct thread {
 	// 각 스레드 당 깨어나야 Wake Time을 가짐
 	int64_t wake_time;
 
+	// Donation 관련 파라미터들
+	int init_priority;
+	struct lock *wait_on_lock;
+	struct list donations;
+	struct list_elem donation_elem;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -149,5 +155,17 @@ void do_iret (struct intr_frame *tf);
 int thread_sleep(int64_t ticks);
 int thread_awake(int64_t ticks);
 int64_t get_min_time();
+
+bool cmp_priority (const struct list_elem *a,
+				   const struct list_elem *b,
+				   void *aux UNUSED);
+
+bool cmp_donation_priority (const struct list_elem *a,
+                            const struct list_elem *b,
+                            void *aux UNUSED);
+
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(void);
 
 #endif /* threads/thread.h */
