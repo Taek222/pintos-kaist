@@ -57,6 +57,7 @@ sema_init (struct semaphore *sema, unsigned value) {
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. This is
    sema_down function. */
+// sema_down: 실행중인(RUNNING) 스레드가 세마포어를 요청할 때 사용하는 함수
 void
 sema_down (struct semaphore *sema) {
 	enum intr_level old_level;
@@ -196,8 +197,25 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	struct thread *curr = thread_current();
+
+	// 해당 lock의 holder가 존재하는지 확인
+	if (lock->holder != NULL) {
+		// 현재 스레드의 wait_on_lock 변수에 기다리는 lock의 주소 저장
+		curr->wait_on_lock = lock;
+
+		// Multiple Donation: 이전 상태의 우선순위를 기억
+		list_push_back(&lock->holder->donations, &curr->donation_elem);
+
+		// Priority Donation 수행
+		donate_priority();
+	}
+
 	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	curr->wait_on_lock = NULL;
+
+	// lock을 획득한 후 lock holder 갱신
+	lock->holder = curr;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -229,6 +247,9 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
+
+	remove_with_lock(lock);
+	refresh_priority();
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
