@@ -3,4 +3,6 @@
 
 void syscall_init (void);
 
+void check_address (void *address);
+
 #endif /* userprog/syscall.h */

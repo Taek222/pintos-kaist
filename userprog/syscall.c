@@ -11,6 +11,8 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
+void check_address (void *address);
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -41,6 +43,24 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
+
 	printf ("system call!\n");
 	thread_exit ();
+}
+
+/*
+	Project 2: User Memory Access
+
+	1) Null Pointer거나
+	2) Kernel VM을 가르키거나 (=KERNEL_BASE보다 높은 주소)
+	3) 매핑되지 않은 VM을 가르키거나 (할당되지 않은 주소)
+
+	check_address: 해당 주소가 올바른 접근인지 확인, 올바르지 않은 주소일 경우 프로세스 종료
+*/
+void check_address (void *address) {
+	struct thread *curr = thread_current();
+
+	if (address == NULL | !is_user_vaddr(address) | pm14_get_page(curr->pm14, address) == NULL) {
+		exit(-1);
+	}
 }
