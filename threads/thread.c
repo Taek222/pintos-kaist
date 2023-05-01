@@ -686,7 +686,7 @@ bool cmp_priority (const struct list_elem *a,
 
 // test_max_priority: 현재 스레드와 우선순위가 가장 높은 스레드를 비교하여 스케줄링
 void test_max_priority(){
-	if (list_empty(&ready_list)) {
+	if (list_empty(&ready_list) || intr_context()) {
 		return;
 	}
     

@@ -27,7 +27,10 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
+void push_arguments(int argc, char **argv, struct intr_frame *if_);
+
 /* General process initializer for initd and other process. */
+// process_init: 현재 프로세스를 초기화하는 함수
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
@@ -38,6 +41,10 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
+/*
+	process_create_initd: 명령줄에서 받은 arguments를 통해 실행하고자 하는 파일에 대한 프로세스를 생성
+	여기서 파라미터로 받는 file_name은 arg[1]로 받은 파일명
+*/
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
@@ -45,12 +52,20 @@ process_create_initd (const char *file_name) {
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
+	/*
+		palloc_get_page: 물리 프레임을 바로 할당시켜주는 함수
+		메모리에서 4KB 만큼 물리메모리 공간을 잡고 시작 주소를 리턴해줌
+	*/
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	/* Create a new thread to execute FILE_NAME. */
+	/*
+		thread_create: file_name의 이름으로 PRI_DEFAULT를 우선순위 값으로 가지는 새로운 스레드 생성
+		Pintos에서는 단일 스레드만 고려, 새로운 스레드 생성 후 TID 리턴
+	*/
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
@@ -58,12 +73,14 @@ process_create_initd (const char *file_name) {
 }
 
 /* A thread function that launches first user process. */
+// initd: 프로세스 초기화, process_exec() 함수 주목
 static void
 initd (void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
 
+	// process_init: 현재 프로세스를 초기화하는 함수
 	process_init ();
 
 	if (process_exec (f_name) < 0)
@@ -160,31 +177,59 @@ error:
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
+/*
+	process_exec: 사용자가 입력한 명령어를 수행할 수 있도록, 프로그램을 메모리에 적재하고 실행하는 함수
+	f_name을 받아 실행 프로그램명과 옵션을 분리시켜줘야 함
+*/
 int
 process_exec (void *f_name) {
+	/*
+		Project 2: Argument Passing
+
+		파라미터가 왜 void *로 넘어와요?
+		: void 포인터는 함수에서 다양한 자료형을 받아들일 때 유용하게 사용, 지금은 문자열로 인식해야 함으로 char *로 변환
+	*/
+
 	char *file_name = f_name;
 	bool success;
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
+	// intr_frame: 인터럽트가 들어왔을 때, 이전에 작업하던 Context를 Switching하기 위한 정보를 담고 있음
 	struct intr_frame _if;
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
+	/*
+		process_cleanup: 현재 실행중인 스레드의 Page Directory, Swtich information을 지워줌
+		새로 생성한 프로세스를 실행하기 위해 현재 실행 중인 스레드와 Context Switching을 하기 위한 준비
+	*/
 	process_cleanup ();
 
 	/* And then load the binary */
+	/*
+		load: 현재 프로세스에 해당 파일을 로드시켜줌, File Parsing 작업을 여기서 진행해야 함
+		파일 로드가 성공적으로 된다면 do_iret(), NOT_REACHED()를 통해 생성된 프로세스로 Context Switching하면 됨
+	*/
 	success = load (file_name, &_if);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
-	if (!success)
+	if (!success) {
 		return -1;
+	}
+
+	/*
+		KERN_BASE
+		USER_STACK
+	*/
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	/* Start switched process. */
+	// do_iret: 이 함수는 어셈블리어로 되어 있는데, 여기서 기존까지 작업했던 context를 intr_frame에 담는 과정을 수행함
 	do_iret (&_if);
 	NOT_REACHED ();
 }
@@ -204,6 +249,9 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+
+	while (1) {}
+
 	return -1;
 }
 
@@ -320,6 +368,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+// load: 현재 프로세스에 해당 파일을 로드시켜줌, File Parsing 작업을 여기서 진행해야 함
 static bool
 load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
@@ -328,6 +377,31 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+
+	/*
+		File Parsing
+		: strtok()은 multi-thread 프로그램에서 오류를 유발할 수 있음
+		: thread-safe한 strtok_r()을 사용하는 것을 권유
+
+		strtok_r()
+		: 파싱한 첫번째 문자열만 반환하기 때문에 while으로 NULL이 나올 때까지 반복해주어야 함
+
+		왜 128로 선언하나요?
+		: Pintos 가이드에서 명령어 제한 길이는 128 바이트라고 언급됨
+	*/
+	char *wordptr, *saveptr;
+
+	int argc = 0;
+	char *argv[128];
+
+	wordptr = strtok_r(file_name, " ", &saveptr);
+	argv[argc] = wordptr;
+
+	while (wordptr != NULL) {
+		wordptr = strtok_r(NULL, " ", &saveptr);
+		argc += 1;
+		argv[argc] = wordptr;
+	}
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -416,6 +490,12 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	/*
+		Argument들을 Stack에 올리는 과정이 필요, 과정이 길어 해당 함수를 새로 생성함
+		인터럽트 프레임을 스택에 올리는 것은 아니고 인터럽트 프레임 내 구조체 중 "rsp"에 값을 넣어주기 위함
+		이후 do_iret()에서 이 인터럽트 프레임을 스택에 올림
+	*/
+	push_arguments(argc, argv, if_);
 
 	success = true;
 
@@ -637,3 +717,59 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
+/*
+	push_arguments: argument들을 stack에 넣는 함수
+	
+	1) 문자열의 오른쪽부터 왼쪽 방향으로 넣어야 함, 스택은 아래로 확장하기 때문
+	2) arg[4]는 NULL이므로 이를 제외하고(argc-1) 저장, arg[0] ~ arg[3]
+	3) strlen()은 센티넬 빼고 셈, 센티넬을 포함해주어야 하기 때문에 (strlen + sizeof(""))
+	4) 왜 rsp에 저장해요? rsp는 스택 포인터 레지스터로, user stack에서 현재 위치를 가리키는 역할
+*/
+void push_arguments(int argc, char **argv, struct intr_frame *if_) {
+	// 1) argv[3][...] ~ argv[0][...]
+	char *address[128];
+
+	for (int i = argc-1; i >= 0; i--) {
+		// 빼는 이유: 스택은 growing down이기 때문, 원하는 크기만큼 내려주고 빈 공간만큼 memcpy 해줌
+		if_->rsp = if_->rsp - (strlen(argv[i]) + sizeof(""));
+		memcpy(if_->rsp, argv[i], strlen(argv[i]) + sizeof(""));
+
+		address[i] = if_->rsp;
+	}
+
+	// 2) Word-align: 8의 배수를 맞추기 위해 padding(0)을 넣는 것
+	while (if_->rsp % 8 != 0) {
+		if_->rsp -= 1;
+		*(uint8_t *) if_->rsp = 0;
+	}
+
+	// 3) argv[4] ~ argv[0]
+	for (int i = argc; i >= 0; i--) {
+		if_->rsp = if_->rsp - 8;
+
+		if (i == argc) {
+			// argv[4]에는 0 넣음 (표 참고)
+			memset(if_->rsp, 0, sizeof(char **));
+		} else {
+			// 나머지는 주소값을 넣음 (표 참고)
+			memcpy(if_->rsp, &address[i], sizeof(char **));
+		}
+	}
+
+	// 4) Return address
+	if_->rsp = if_->rsp - 8;
+	memset(if_->rsp, 0, sizeof(void *));
+
+	/*
+		rsi: 메모리를 이동하거나 비교할 때 출발 주소를 가르킴
+		rdi: 메모리를 이동하거나 비교할 때 목적지 주소를 가르킴
+		rsp: 스택에서 현재 위치를 가르킴, 스택의 삽입 및 삭제에 의해 변경됨
+
+		rsi는 왜 rsp + 8을 하나요?
+		: 위에서 4번 return address 값을 저장하기 위해서 - 8을 해주었음
+		: rsi는 출발 주소여야 하기 때문에 address의 맨 앞을 가리켜야 하기 때문에 + 8 해주어야 함
+		: 스택은 위에서 아래로 (높은 주소에서 낮은 주소로) growing한다는 것 주의
+	*/
+	if_->R.rdi  = argc;
+	if_->R.rsi = if_->rsp + 8;
+}

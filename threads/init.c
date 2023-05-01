@@ -65,6 +65,7 @@ static void print_stats (void);
 int main (void) NO_RETURN;
 
 /* Pintos main program. */
+// main: 메모리, 스레드, Page Table 등을 초기화하는 함수
 int
 main (void) {
 	uint64_t mem_end;
@@ -74,6 +75,10 @@ main (void) {
 	bss_init ();
 
 	/* Break command line into arguments and parse options. */
+	/*
+		read_command_line: 명령어 읽어들임
+		parse_options: 해당 라인을 Parsing하여 argv에 담아 넘김
+	*/
 	argv = read_command_line ();
 	argv = parse_options (argv);
 
@@ -119,6 +124,10 @@ main (void) {
 	printf ("Boot complete.\n");
 
 	/* Run actions specified on kernel command line. */
+	/*
+		run_actions: action 구조체 정의, run_task 함수 실행
+		run_task: action 구조체를 탐색하면서 argv와 action name을 비교하여 미리 정의된 function 실행
+	*/
 	run_actions (argv);
 
 	/* Finish up. */
@@ -254,6 +263,7 @@ run_task (char **argv) {
 
 /* Executes all of the actions specified in ARGV[]
    up to the null pointer sentinel. */
+// run_actions: 명령어에 맞는 동작을 실행하는 함수, 현재는 "run" action만 확인하면 됨
 static void
 run_actions (char **argv) {
 	/* An action. */
