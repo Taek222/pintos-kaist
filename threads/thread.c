@@ -208,6 +208,32 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
+	/*
+		Project 2: System Call
+
+		1) 부모 프로세스 저장
+		2) 프로그램 로드되지 않음, 프로세스 종료되지 않음
+		3) exit, load 세마포어 0으로 초기화 -> init_thread
+		4) 자식 리스트에 추가
+	*/
+
+	// 생성한 자식을 부모의 자식 리스트(child_elem)에 넣음, 그래야 나중에 부모의 자식 리스트에서 찾을 수 있음
+	struct thread *curr = thread_current();
+	list_push_back(&curr->child_list, &t->child_elem);
+
+	// fd 값 초기화 후, fdt에 메모리 할당
+	t->fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+    if(t->fd_table == NULL) {
+		return TID_ERROR;
+	}
+
+    t->fd_table[0] = 1;
+    t->fd_table[1] = 2;
+    t->fd_index = 2;
+
+    t->stdin_count = 1;
+    t->stdout_count = 1;
+
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t->tf.rip = (uintptr_t) kernel_thread;
@@ -435,6 +461,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->init_priority = priority;
 	list_init(&t->donations);
 	t->wait_on_lock = NULL;
+
+	// System Call 관련 인자들을 초기화 시켜줌
+	list_init(&t->child_list);
+    sema_init(&t->wait_sema, 0);
+    sema_init(&t->fork_sema, 0);
+    sema_init(&t->free_sema, 0);
+	
+    t->exit_status = 0;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

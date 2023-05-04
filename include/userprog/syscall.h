@@ -5,4 +5,6 @@ void syscall_init (void);
 
 void check_address (void *address);
 
+struct lock file_lock;
+
 #endif /* userprog/syscall.h */

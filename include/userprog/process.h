@@ -11,5 +11,6 @@ void process_exit (void);
 void process_activate (struct thread *next);
 
 void push_arguments(int argc, char **argv, struct intr_frame *if_);
+struct thread *find_child(int pid);
 
 #endif /* userprog/process.h */
