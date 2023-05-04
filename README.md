@@ -34,6 +34,8 @@ syscall.h, syscall.c에 check_address 함수 추가
 https://github.com/unauthorized-401/pintos-kaist/commit/bf73bc5ec252a3b601439178efb967a6e858f56d
 
 ### System Calls
+62 of 95 tests failed.<br>
+https://github.com/unauthorized-401/pintos-kaist/commit/5284e6c8241a7cca7274da9336156196b963568b
 
 ### Process Termination Message
 
