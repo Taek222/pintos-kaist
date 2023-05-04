@@ -30,7 +30,7 @@ After
 https://github.com/unauthorized-401/pintos-kaist/commit/3f1ff559bb5de5b8a5d299ad25a9d3a4af868b12
 
 ### User Memory Access
-syscall.h, syscall.c에 check_address 함수 추가
+syscall.h, syscall.c에 check_address 함수 추가<br>
 https://github.com/unauthorized-401/pintos-kaist/commit/bf73bc5ec252a3b601439178efb967a6e858f56d
 
 ### System Calls
@@ -38,5 +38,8 @@ https://github.com/unauthorized-401/pintos-kaist/commit/bf73bc5ec252a3b601439178
 https://github.com/unauthorized-401/pintos-kaist/commit/5284e6c8241a7cca7274da9336156196b963568b
 
 ### Process Termination Message
+4 of 95 tests failed.<br>
+https://github.com/unauthorized-401/pintos-kaist/commit/adf276f6c46226e04b4d9eb20b778893bf3d92d2
 
 ### Deny Write on Executables
+All 95 tests passed.<br>

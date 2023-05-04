@@ -347,6 +347,7 @@ process_exit (void) {
     palloc_free_multiple(curr->fd_table, FDT_PAGES);
 
     sema_up(&curr->wait_sema);
+    file_close(curr->running);
     sema_down(&curr->free_sema);
 
 	process_cleanup ();
@@ -501,6 +502,17 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
+	/*
+		Project 2: System Call
+
+		1) 현재 스레드가 할 일 설정
+		2) 해당 파일에 다른 내용을 쓸 수 없도록 함
+
+		file.c의 file_deny_write() 사용
+	*/
+	t->running = file;
+	file_deny_write(file);
+
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -586,7 +598,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
 	return success;
 }
 
