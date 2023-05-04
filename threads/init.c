@@ -72,6 +72,10 @@ main (void) {
 	char **argv;
 
 	/* Clear BSS and get machine's RAM size. */
+	/*
+		Block Started by Symbol (BSS)
+		: 0으로 초기화된 정적 할당 변수가 포함된 데이터 세그먼트의 일부로 컴파일러나 링커에 의해 사용됨
+	*/
 	bss_init ();
 
 	/* Break command line into arguments and parse options. */

@@ -9,6 +9,10 @@
 #include "vm/vm.h"
 #endif
 
+// System Call
+#include "threads/synch.h"
+#define FDT_PAGES 3
+#define FDCOUNT_LIMIT FDT_PAGES *(1 << 9)
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -103,6 +107,25 @@ struct thread {
 	struct lock *wait_on_lock;
 	struct list donations;
 	struct list_elem donation_elem;
+
+   // System Call 관련 파라미터들
+   int exit_status;
+   struct intr_frame parent_if;
+
+   struct list child_list;
+   struct list_elem child_elem;
+
+   struct semaphore wait_sema;
+   struct semaphore fork_sema;
+   struct semaphore free_sema;
+
+   int fd_index;
+   struct file **fd_table;
+
+   int stdin_count;
+   int stdout_count;
+
+   struct file *running;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

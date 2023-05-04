@@ -87,8 +87,6 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
-#define MIN(a, b) ((a) > (b) ? (b) : (a))
-
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -207,6 +205,32 @@ thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
+
+	/*
+		Project 2: System Call
+
+		1) 부모 프로세스 저장
+		2) 프로그램 로드되지 않음, 프로세스 종료되지 않음
+		3) exit, load 세마포어 0으로 초기화 -> init_thread
+		4) 자식 리스트에 추가
+	*/
+
+	// 생성한 자식을 부모의 자식 리스트(child_elem)에 넣음, 그래야 나중에 부모의 자식 리스트에서 찾을 수 있음
+	struct thread *curr = thread_current();
+	list_push_back(&curr->child_list, &t->child_elem);
+
+	// fd 값 초기화 후, fdt에 메모리 할당
+	t->fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+    if(t->fd_table == NULL) {
+		return TID_ERROR;
+	}
+
+    t->fd_table[0] = 1;
+    t->fd_table[1] = 2;
+    t->fd_index = 2;
+
+    t->stdin_count = 1;
+    t->stdout_count = 1;
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
@@ -435,6 +459,15 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->init_priority = priority;
 	list_init(&t->donations);
 	t->wait_on_lock = NULL;
+
+	// System Call 관련 인자들을 초기화 시켜줌
+	list_init(&t->child_list);
+    sema_init(&t->wait_sema, 0);
+    sema_init(&t->fork_sema, 0);
+    sema_init(&t->free_sema, 0);
+	
+    t->running = NULL;
+    t->exit_status = 0;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -551,7 +584,11 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
-// do_schedule: 현재 삭제 리스트에 있는 스레드들을 지워줌
+/*
+	스케줄 자체가 새로운 프로세스이므로, 진입시 인터럽트가 비활성화 되어야 함
+	do_schedule 함수는 현재 스레드의 상태를 다른 상태로 바꾸어 주고 해당 스레드와 바꾸어 실행할 다른 스레드를 찾아줌
+	스케줄 함수 안에서는 printf() 함수 호출은 권장되지 않음
+ */
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
