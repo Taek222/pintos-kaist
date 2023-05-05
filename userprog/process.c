@@ -71,6 +71,14 @@ process_create_initd (const char *file_name) {
 	char *save_ptr;
 	
 	file_name = strtok_r (file_name, " ", &save_ptr);
+
+	/*
+		thread_create()를 통해 만들어진 스레드에게 initd 함수를 실행하라는 의미
+		여기서 initd 함수의 인자는 fn_copy
+
+		thread_create() + "file_name"
+		initd() + "fn_copy"
+	*/
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 
 	if (tid == TID_ERROR)
@@ -86,9 +94,16 @@ initd (void *f_name) {
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
 
-	// process_init: 현재 프로세스를 초기화하는 함수
+	/*
+		process_init: 현재 프로세스를 초기화하는 함수
+		현재 실행중인 스레드가 있는지 확인하는 것 자체만으로도, 프로세스를 초기화하는 효과
+	*/
 	process_init ();
 
+	/*
+		process_exec: 실제로 사용자 프로그램을 실행시키는 함수
+		argument passing -> load() -> do_iret() 진행
+	*/
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -262,8 +277,29 @@ process_exec (void *f_name) {
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
-	 * it stores the execution information to the member. */
-	// intr_frame: 인터럽트가 들어왔을 때, 이전에 작업하던 Context를 Switching하기 위한 정보를 담고 있음
+	 * it stores the execution information to the member.
+	 * 
+	 * thread 구조체에서 intr_frame을 사용할 수 없다.
+	 * 왜냐하면 thread_current()가 스케줄링되면, member에 실행 정보를 저장하기 때문이다.
+	 * 
+	 * 이 process_exec()는 file_name으로 가져온 스레드로 context switching을 하는 함수
+	 * 따라서, 현재 스레드의 레지스터를 쓰면 안된다는 의미
+	 * 현재 스레드의 레지스터에 context를 저장해야 다시 현재 스레드를 실행할 때 context를 가져와야 함으로
+	 * */
+
+	/*
+		intr_frame: 인터럽트가 들어왔을 때, 이전에 작업하던 Context를 Switching하기 위한 정보를 담고 있음
+		실행중인 프로세스의 레지스터 정보, 스택 포인터, 인스트럭션 카운터를 저장
+
+		ds: data segment
+		es: extra segment
+		ss: stack segment
+		cs: code segment
+		eflags: cpu flags
+
+		SEL_UDSEG: 유저 데이터 영역
+		SEL_UCSEG: 유저 코드 영역
+	*/
 	struct intr_frame _if;
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
@@ -272,6 +308,8 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	/*
 		process_cleanup: 현재 실행중인 스레드의 Page Directory, Swtich information을 지워줌
+		가상 메모리와 물리 메모리를 연결해주는 pml4를 NULL로 변경, 연결을 끊어줌
+
 		새로 생성한 프로세스를 실행하기 위해 현재 실행 중인 스레드와 Context Switching을 하기 위한 준비
 	*/
 	process_cleanup ();
@@ -284,19 +322,17 @@ process_exec (void *f_name) {
 	success = load (file_name, &_if);
 
 	/* If load failed, quit. */
+	palloc_free_page (file_name);
+
 	if (!success) {
-		palloc_free_page (file_name);
 		return -1;
 	}
 
-	/*
-		KERN_BASE
-		USER_STACK
-	*/
-	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
-
 	/* Start switched process. */
-	// do_iret: 이 함수는 어셈블리어로 되어 있는데, 여기서 기존까지 작업했던 context를 intr_frame에 담는 과정을 수행함
+	/*
+		do_iret
+		: 현재까지 작업했던 인터럽트 프레임(tf)의 값들을 레지스터에 넣는 작업을 수행함
+	*/
 	do_iret (&_if);
 	NOT_REACHED ();
 }
@@ -454,7 +490,12 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
-// load: 현재 프로세스에 해당 파일을 로드시켜줌, File Parsing 작업을 여기서 진행해야 함
+/*
+	RIP = PC: 프로그램 카운터, 실행할 프로그램을 가리킴
+	RSP: 스택 포인터의 끝을 가리킴
+
+	load: 현재 프로세스에 해당 파일을 로드시켜줌, File Parsing 작업을 여기서 진행해야 함
+*/
 static bool
 load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
@@ -514,6 +555,10 @@ load (const char *file_name, struct intr_frame *if_) {
 	file_deny_write(file);
 
 	/* Read and verify executable header. */
+	/*
+		ELF: 실행 파일, 목적 파일, 공유 라이브러리 그리고 코어 덤프를 위한 표준 파일 형식
+		해당 파일의 헤더를 체크하여 해당 형식에 적합한지를 (실행 가능한 파일인지) 확인
+	*/
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2
@@ -568,6 +613,13 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					/*
+						load_segment
+						: 커널 주소에 해당 파일을 로드함
+						: install_page()를 통해 유저 스택 페이지와 커널 주소를 매핑시킴
+
+						즉, load_segment()가 호출되면 해당 파일이 전부 커널 페이지에 올라가는 것
+					*/
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
 						goto done;
@@ -579,6 +631,10 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
+	/*
+		setup_stack
+		: 최소 크기의 스택을 생성하는데, 이는 0으로 초기화된 한 페이지를 유저 스택으로 할당
+	*/
 	if (!setup_stack (if_))
 		goto done;
 

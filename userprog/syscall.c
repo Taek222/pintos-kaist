@@ -38,9 +38,6 @@ struct file *find_file_by_fd(int fd);
 int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
 
-const int STDIN = 1;
-const int STDOUT = 2;
-
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -290,8 +287,12 @@ int read (int fd, void *buffer, unsigned size) {
 
 	int count;
 	unsigned char *value = buffer;
-	if (file == STDIN) {
+	if (fd == 0) {
 		for (int i = 0; i < size; i++) {
+			/*
+				input_getc: 키보드로 입력 받은 문자를 반환하는 함수
+				이 함수 안에서 q가 lock을 부여 받음, 즉 read()에서 lock을 구현할 때 중복되면 안됨
+			*/
 			char key = input_getc();
 			*value++ = key;
 
@@ -301,7 +302,7 @@ int read (int fd, void *buffer, unsigned size) {
 		}
 		count = size;
 
-	} else if (file == STDOUT) {
+	} else if (fd == 1) {
 		return -1;
 
 	} else {
@@ -323,10 +324,10 @@ int write (int fd, const void *buffer, unsigned size) {
 	}
 
 	int count;
-	if (file == STDIN) {
+	if (fd == 0) {
 		return -1;
 
-	} else if (file == STDOUT) {
+	} else if (fd == 1) {
 		putbuf(buffer, size);
 		count = size;
 	
@@ -339,7 +340,7 @@ int write (int fd, const void *buffer, unsigned size) {
 	return count;
 }
 
-// fd에서 읽거나 쓸 다음 바이트를 파일 시작 부분부터 바이트 단위로 표시되는 위치로 변경, file.c의 file_seek() 사용
+// fd에서 읽거나 쓸 다음 파일의 위치(offset)를 이동시킴, file.c의 file_seek() 사용
 void seek (int fd, unsigned position) {
 	struct file *file = find_file_by_fd(fd);
 
@@ -350,7 +351,7 @@ void seek (int fd, unsigned position) {
 	file_seek(file, position);
 }
 
-// fd에서 읽거나 쓸 다음 바이트의 위치를 바이트 단위로 리턴, file.c의 file_tell() 사용
+// fd에서 읽거나 쓸 다음 파일의 위치(offset)를 알려줌, file.c의 file_tell() 사용
 unsigned tell (int fd) {
 	struct file *file = find_file_by_fd(fd);
 
@@ -371,7 +372,7 @@ void close (int fd) {
 	remove_file_from_fdt(fd);
 }
 
-// ↓ System Call 함수들이 필요로 하는 함수들
+// ↓ System Call Helper Functions
 
 // find_file_by_fd: 현재 스레드가 읽고 있는 fd를 리턴하는 함수
 struct file *find_file_by_fd (int fd) {
@@ -384,12 +385,12 @@ struct file *find_file_by_fd (int fd) {
     return curr->fd_table[fd];
 }
 
-// add_file_to_fdt: 테이블을 조회하여 넣을 수 있는 곳을 찾고, 해당 파일을 추가
+// add_file_to_fdt: fd 테이블을 조회하여 넣을 수 있는 곳을 찾고, 해당 파일을 추가
 int add_file_to_fdt(struct file *file) {
     struct thread *curr = thread_current();
     struct file **fdt = curr->fd_table;
 
-	// fd 테이블의 앞부터 순차적으로 검색, fd_index는 fdt 인덱스의 마지막 값
+	// fd의 위치가 제한 범위 안에 있고, fd 테이블의 해당 인덱스의 칸이 채워져 있다면,
     while (curr->fd_index < FDCOUNT_LIMIT && fdt[curr->fd_index]) {
         curr->fd_index++;
     }

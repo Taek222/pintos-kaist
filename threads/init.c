@@ -72,6 +72,16 @@ main (void) {
 	char **argv;
 
 	/* Clear BSS and get machine's RAM size. */
+	/*
+		bss (block started by symbol)
+		: 초기화되지 않은 (혹은 초기화를 0이나 NULL로 한) 정적 및 전역 데이터를 위한 영역
+
+		왜 초기화되지 않은 데이터를 위한 공간이 따로 있나요?
+		: 전체 프로그램의 크기를 작게 만들 수 있기 때문
+		: 초기값이 주어진 data 영역에 들어가는 변수들은 변수마다 값을 넣어주는 공간만큼 용량을 차지함
+		: 초기화되지 않은 bss에 들어가는 변수들은 그 값을 넣어줄 필요가 없기에, 변수만 알려주면 됨
+		: 따라서 변수의 값을 넣을 필요가 없어 그 만큼 프로그램의 용량이 작아지게 됨
+	*/
 	bss_init ();
 
 	/* Break command line into arguments and parse options. */
@@ -84,15 +94,39 @@ main (void) {
 
 	/* Initialize ourselves as a thread so we can use locks,
 	   then enable console locking. */
+	/*
+		thread_init
+		: 해당 함수 안의 init_thread()가 initial 스레드인 main 스레드를 생성함 (main 스레드는 커널 스레드)
+		: tid는 1로 생성됨
+
+		console_init
+		: console_lock을 초기화, vprintf, putbuf 등 출력에 사용되는 lock
+	*/
 	thread_init ();
 	console_init ();
 
 	/* Initialize memory system. */
+	/*
+		메모리 초기화
+		palloc_init: page allocator를 초기화, 사용 가능한 메모리 사이즈를 얻음
+		malloc_init: malloc descriptor를 초기화
+		paging_init: palloc_get_page() 통해 다음 cpu가 새 페이지 디렉토리를 사용하도록 함
+	*/
 	mem_end = palloc_init ();
 	malloc_init ();
 	paging_init (mem_end);
 
 #ifdef USERPROG
+	/*
+		tss (task state segment)
+		: 해당 함수의 tss_update()를 보면, tss의 rsp0가 커널 스택의 끝을 가리키도록 함
+		: 사용자 프로세스가 인터럽트 핸들러에 들어갈 때 하드웨어가 커널의 스택 포인터를 찾기 위해 tss를 참조함
+
+		gdt (global desriptor table)
+		: 프로그램 실행 중에 사용되는 다양한 메모리 영역의 특성을 정의하기 위해 인텔 프로세스에서 사용하는 데이터 구조
+		: 기본 주소, 크기, 실행 가능성 및 쓰기 가능성과 같은 액세스 권한을 포함하고 있음
+		: gdt_init()은 사용자 영역에 있는 gdt들을 초기화 시킴
+	*/
 	tss_init ();
 	gdt_init ();
 #endif
@@ -107,6 +141,10 @@ main (void) {
 	syscall_init ();
 #endif
 	/* Start thread scheduler and enable interrupts. */
+	/*
+		serial_init_queue: 외부 디바이스를 쓰기 위한 초기화
+		timer_calibrate: 타이머가 자동으로 작동되도록
+	*/
 	thread_start ();
 	serial_init_queue ();
 	timer_calibrate ();
@@ -125,7 +163,7 @@ main (void) {
 
 	/* Run actions specified on kernel command line. */
 	/*
-		run_actions: action 구조체 정의, run_task 함수 실행
+		run_actions: action 구조체 정의, 이 안에서 run_task 함수 실행
 		run_task: action 구조체를 탐색하면서 argv와 action name을 비교하여 미리 정의된 function 실행
 	*/
 	run_actions (argv);
@@ -149,6 +187,23 @@ bss_init (void) {
 	memset (&_start_bss, 0, &_end_bss - &_start_bss);
 }
 
+/*
+	63          48 47            39 38            30 29            21 20         12 11         0
+	+-------------+----------------+----------------+----------------+-------------+------------+
+	| Sign Extend |    Page-Map    | Page-Directory | Page-directory |  Page-Table |  Physical  |
+	|             | Level-4 Offset |    Pointer     |     Offset     |   Offset    |   Offset   |
+	+-------------+----------------+----------------+----------------+-------------+------------+
+				|                |                |                |             |            |
+				+------- 9 ------+------- 9 ------+------- 9 ------+----- 9 -----+---- 12 ----+
+											Virtual Address
+
+	초기화해주어야 할 곳
+	1) PML4 (page-map level 4)
+	2) PDP (page-directory pointer)
+	3) PD (page-directory)
+	4) PT (page-table)
+*/
+
 /* Populates the page table with the kernel virtual mapping,
  * and then sets up the CPU to use the new page directory.
  * Points base_pml4 to the pml4 it creates. */
@@ -160,7 +215,7 @@ paging_init (uint64_t mem_end) {
 
 	extern char start, _end_kernel_text;
 	// Maps physical address [0 ~ mem_end] to
-	//   [LOADER_KERN_BASE ~ LOADER_KERN_BASE + mem_end].
+	// [LOADER_KERN_BASE ~ LOADER_KERN_BASE + mem_end].
 	for (uint64_t pa = 0; pa < mem_end; pa += PGSIZE) {
 		uint64_t va = (uint64_t) ptov(pa);
 
@@ -253,6 +308,12 @@ run_task (char **argv) {
 	if (thread_tests){
 		run_test (task);
 	} else {
+		/*
+			실행 순서: process_create_initd() -> process_wait()
+
+			process_create_initd: 사용자 프로그램을 실행시킴
+			process_wait: process_create_initd()에서 리턴된 tid가 process_wait()의 인수로 가는 것, 즉 이 tid가 waiting하는 것
+		*/
 		process_wait (process_create_initd (task));
 	}
 #else

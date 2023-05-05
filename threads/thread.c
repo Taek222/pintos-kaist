@@ -236,6 +236,9 @@ thread_create (const char *name, int priority,
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
+	/*
+		rip = pc (program counter)
+	*/
 	t->tf.rip = (uintptr_t) kernel_thread;
 	t->tf.R.rdi = (uint64_t) function;
 	t->tf.R.rsi = (uint64_t) aux;
@@ -486,6 +489,11 @@ next_thread_to_run (void) {
 }
 
 /* Use iretq to launch the thread */
+/*
+	movq: 인터럽트 프레임 내 gp_register 값들을 하나하나 레지스터에 넣음
+	addq: args.c 파일의 main() 함수를 실행함
+	iretq: 인터럽트 처리를 완료하고 이전에 수행하던 코드로 복원, 즉 유저 영역으로 복귀해서 프로세스를 시작한다는 의미
+*/
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(

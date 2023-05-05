@@ -5,6 +5,10 @@
 
 #include "tests/lib.h"
 
+/*
+  msg() -> vmsg() -> write()
+  여기서 write()는 /lib/user/syscall.c에 위치함, 즉 유저 코드
+*/
 int
 main (int argc, char *argv[]) 
 {

@@ -240,6 +240,10 @@ palloc_init (void) {
   /* End of the kernel as recorded by the linker.
      See kernel.lds.S. */
 	extern char _end;
+	/*
+		base memory: 커널이 사용하는 기본 메모리
+		external memory: 추가적으로 사용할 수 있는 메모리
+	*/
 	struct area base_mem = { .size = 0 };
 	struct area ext_mem = { .size = 0 };
 
@@ -291,6 +295,12 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt) {
    then the page is filled with zeros.  If no pages are
    available, returns a null pointer, unless PAL_ASSERT is set in
    FLAGS, in which case the kernel panics. */
+/*
+	1) 하나의 free 페이지를 가져와 커널 가상 주소를 리턴
+	2) PAL_USER가 설정되어 있으면, 페이지는 user pool에서 가져오고 그렇지 않으면 kernel pool에서 가져옴
+	3) PAL_ZERO로 설정되어 있으면, 페이지가 0으로 채워짐
+	4) 사용 가능한 페이지가 없을 경우 NULL 포인터 반환, flags가 설정되어 있지 않으면 커널 패닉 발생
+*/
 void *
 palloc_get_page (enum palloc_flags flags) {
 	return palloc_get_multiple (flags, 1);

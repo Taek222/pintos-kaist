@@ -14,6 +14,12 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 	register uint64_t *a5 asm ("r8") = (uint64_t *) a5_;
 	register uint64_t *a6 asm ("r9") = (uint64_t *) a6_;
 
+	/*
+		인자로 받은 값들을 레지스터에 하나씩 입력함
+		인자로 받은 값들을 넣고 나머지 값은 0으로 넣음
+		syscall-entry.S 파일로 넘어감
+	*/
+
 	__asm __volatile(
 			"mov %1, %%rax\n"
 			"mov %2, %%rdi\n"

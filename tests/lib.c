@@ -21,6 +21,10 @@ vmsg (const char *format, va_list args, const char *suffix)
   snprintf (buf, sizeof buf, "(%s) ", test_name);
   vsnprintf (buf + strlen (buf), sizeof buf - strlen (buf), format, args);
   strlcpy (buf + strlen (buf), suffix, sizeof buf - strlen (buf));
+  
+  /*
+    여기서 write()는 유저 모드(/lib/user/syscall.c)의 write()를 호출
+  */
   write (STDOUT_FILENO, buf, strlen (buf));
 }
 
