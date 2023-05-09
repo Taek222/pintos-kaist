@@ -211,7 +211,7 @@ int exec (const char *cmd_line) {
 	return 0;
 }
 
-// 자식 프로세스 pid를 기다렸다가 자식의 종료 상태를 검색, process.c의 process_wait() 사용
+// 자식 프로세스가 종료될 때까지 대기하고 올바르게 종료되었는지 확인, process.c의 process_wait() 사용
 int wait (tid_t pid) {
 	return process_wait(pid);
 }

@@ -122,6 +122,15 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	struct thread *curr = thread_current();
     memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
 
+	/*
+		위에서 memcpy를 통해 현재 스레드의 parent_if에 if_를 저장
+		: 복사될 스레드가 현재 스레드의 parent_if를 참조하도록, __do_fork()의 memcpy문을 보면 parent_if를 if_로 복사함
+		: 여기서 parent_if는 userland의 context를 뜻함
+		: 즉, 커널 스택 영역을 가리키고 있기 때문에 유저 영역을 알려줘야 함
+
+		thread_create() + "name"
+		__do_fork() + "curr"
+	*/
     tid_t pid = thread_create(name, PRI_DEFAULT, __do_fork, curr);
 
     if (pid == TID_ERROR) {
@@ -130,6 +139,11 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 
     struct thread *child = find_child(pid);
 
+	/*
+		do_fork에서 fork sema up으로 막혀있었는데, fork sema down 해줌
+		자식 스레드가 생성되고 do_fork 완료할 때까지 fork()에서 대기한다는 의미
+		모두 완료되면, 자식 스레드의 tid를 리턴
+	*/
     sema_down(&child->fork_sema);
 
     if (child->exit_status == -1) {
@@ -191,6 +205,13 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
  *       this function. */
 static void
 __do_fork (void *aux) {
+	/*
+		parent: 부모 스레드 (thread_create를 호출할 당시의 running thread)
+		current: 자식 스레드 (현재의 running thread)
+
+		fork() 시 부모 프로세스는 자식 프로세스의 PID를 리턴하고, 자식 프로세스는 0을 리턴함
+		부모의 pml4를 자식의 pml4에 복사해주어야 함
+	*/
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
@@ -359,6 +380,14 @@ process_wait (tid_t child_tid UNUSED) {
         return -1;
     }
 
+	/*
+		부모는 자식 프로세스가 종료될 때까지 대기, 정상적으로 종료 시 exit_status 반환, 아니면 -1 반환
+
+		1) wait sema down: 부모는 자식이 process_exit()에서 wait sema up할 때까지 대기
+		2) remove child elem: 부모가 exit_status를 가져올 수 있도록 자식의 페이지는 유지
+		3) free sema up: 잠들었던 자식 프로세스 깨움
+		4) 부모 프로세스의 wait() 종료 -> 자식 프로세스의 process_exit() 종료
+	*/
     sema_down(&child_thread->wait_sema);
     list_remove(&child_thread->child_elem);
     sema_up(&child_thread->free_sema);

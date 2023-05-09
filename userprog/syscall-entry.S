@@ -1,6 +1,10 @@
 #include "threads/loader.h"
 
 /*
+	syscall-entry.S
+	: rsp 레지스터에 담겨있던 값(유저 스택 포인터 주소값)을 rbx 레지스터에 임시로 저장
+	: rsp 레지스터에 tss 주소값을 가져와 넣음, 즉 이때부터 rsp 레지스터에는 커널 스택 포인터 값이 들어있는 것
+
 	movabs $tss, %r12
 	: 커널 스택 포인터를 tss로 찾음
 	: 커널을 호출해 커널 스택에 데이터를 넣어주어야 하기 때문에
@@ -8,7 +12,7 @@
 	movq 4(%r12), %rsp
 	: tss 값을 %rsp에 넣어줌, 이를 통해 커널 스택 포인터로 이동할 수 있게 됨
 	: 커널 모드로 진입하여 ring0의 권한을 갖고, 작업이 끝나면 sysretq를 리턴함
-	: 위 작업들이 끝나면 syscall_handler()를 호출함
+	: sysretq가 반환하면, syscall_handler()를 호출함
 */
 
 .text
