@@ -55,6 +55,11 @@ typedef bool hash_less_func (const struct hash_elem *a,
 typedef void hash_action_func (struct hash_elem *e, void *aux);
 
 /* Hash table. */
+/*
+	Hash 구조체
+	: Key와 Value로 구성되어 있음
+	: 실제 값이 buckets에 들어감
+*/
 struct hash {
 	size_t elem_cnt;            /* Number of elements in table. */
 	size_t bucket_cnt;          /* Number of buckets, a power of 2. */

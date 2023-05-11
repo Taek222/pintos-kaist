@@ -21,6 +21,10 @@ static void rehash (struct hash *);
 
 /* Initializes hash table H to compute hash values using HASH and
    compare hash elements using LESS, given auxiliary data AUX. */
+/*
+	Pintos는 힙 영역이 존재하지 않음, 하지만 malloc으로 할당 받으면 힙 영역에 저장되는 것 아닌가?
+	malloc()에 들어가보면 palloc_get_multiple()을 통해 물리 메모리를 할당함
+*/
 bool
 hash_init (struct hash *h,
 		hash_hash_func *hash, hash_less_func *less, void *aux) {

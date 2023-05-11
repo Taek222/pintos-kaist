@@ -174,6 +174,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	
 }
 
 /* Copy supplemental page table from src to dst */
@@ -187,4 +188,50 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+// Helper Functions
+
+/*
+	hash_entry: 해당 hash_elem을 가지고 있는 page를 리턴하는 함수
+	page_bytes: 해당 page의 가상 주소를 hashed index로 변환하는 함수
+*/
+unsigned page_hash (struct hash_elem *elem, void *aux UNUSED) {
+	struct page *page = hash_entry(elem, struct page, hash_elem);
+
+	return page_bytes(&page->va, sizeof(&page->va));
+}
+
+/*
+	page_less: 두 page의 주소값을 비교하여 왼쪽 값이 작으면 True 리턴하는 함수
+*/
+bool page_less (struct hash_elem *elema, struct hash_elem *elemb, void *aux UNUSED) {
+	struct page *pagea = hash_entry(elema, struct page, hash_elem);
+	struct page *pageb = hash_entry(elemb, struct page, hash_elem);
+
+	return &pagea->va < &pageb->va;
+}
+
+/*
+	page_insert: hash에 page를 삽입하는 함수, hash_insert() 사용
+	해당 자리에 값이 있으면 삽입 실패
+*/
+bool page_insert (struct hash *hash, struct page *page) {
+	if (!hash_insert(hash, &page->hash_elem)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+/*
+	page_delete: hash에 page를 삭제하는 함수 (hash, page), hash_delete() 사용
+	해당 자리에 값이 없으면 삭제 실패
+*/
+bool page_delete (struct hash *hash, struct page *page) {
+	if (hash_delete(hash, &page->hash_elem)) {
+		return true;
+	} else {
+		return false;
+	}
 }
