@@ -49,6 +49,7 @@ struct page {
 
 	/* Your implementation */
 	struct hash_elem hash_elem;
+	bool writable;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -63,9 +64,16 @@ struct page {
 };
 
 /* The representation of "frame" */
+/*
+	Project 3: Frame Management
+	
+	Frame을 리스트(Frame Table)에 연결하기 위해 list_elem 타입의 멤버 추가
+	이 frame 구조체는 프로세스의 커널 가상 주소에 위치하여 있음
+*/
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.

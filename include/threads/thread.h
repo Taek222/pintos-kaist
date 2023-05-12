@@ -127,9 +127,6 @@ struct thread {
 
 	struct file *running;
 
-	// Supplemental Page Table 관련 파라미터들
-	struct supplemental_page_table *spt
-
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */

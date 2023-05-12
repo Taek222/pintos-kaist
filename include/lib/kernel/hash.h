@@ -35,6 +35,10 @@ struct hash_elem {
  * name of the outer structure STRUCT and the member name MEMBER
  * of the hash element.  See the big comment at the top of the
  * file for an example. */
+/*
+	hash_entry: hash_elem을 통해 page를 얻는 함수
+	(hash_elem 값이 들어있는 변수명, struct page, hash_elem)
+*/
 #define hash_entry(HASH_ELEM, STRUCT, MEMBER)                   \
 	((STRUCT *) ((uint8_t *) &(HASH_ELEM)->list_elem        \
 		- offsetof (STRUCT, MEMBER.list_elem)))

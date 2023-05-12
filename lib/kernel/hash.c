@@ -24,6 +24,9 @@ static void rehash (struct hash *);
 /*
 	Pintos는 힙 영역이 존재하지 않음, 하지만 malloc으로 할당 받으면 힙 영역에 저장되는 것 아닌가?
 	malloc()에 들어가보면 palloc_get_multiple()을 통해 물리 메모리를 할당함
+
+	buckets은 배열이기 때문에, 크기를 미리 알아야 함
+	-> malloc을 통해 bucket_cnt 값이 변함에 따라 동적으로 크기를 초기화 한다는 의미
 */
 bool
 hash_init (struct hash *h,
@@ -38,8 +41,10 @@ hash_init (struct hash *h,
 	if (h->buckets != NULL) {
 		hash_clear (h, NULL);
 		return true;
-	} else
+
+	} else {
 		return false;
+	}
 }
 
 /* Removes all the elements from H.
@@ -123,6 +128,9 @@ hash_replace (struct hash *h, struct hash_elem *new) {
 
 /* Finds and returns an element equal to E in hash table H, or a
    null pointer if no equal element exists in the table. */
+/*
+	hash_find: 있으면 hash_elem, 없으면 null 리턴하는 함수
+*/
 struct hash_elem *
 hash_find (struct hash *h, struct hash_elem *e) {
 	return find_elem (h, find_bucket (h, e), e);
