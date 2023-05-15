@@ -12,5 +12,10 @@ void process_activate (struct thread *next);
 
 void push_arguments(int argc, char **argv, struct intr_frame *if_);
 struct thread *find_child(int pid);
+struct container {
+  struct file *file;
+  off_t offset;
+  size_t page_read_bytes;
+}
 
 #endif /* userprog/process.h */
